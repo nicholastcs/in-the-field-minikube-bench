@@ -1,0 +1,12 @@
+version: '3'
+
+vars:
+  "TIMESTAMP":
+    sh: date +"%H%M%S-%d%m%y"
+  "REGISTRY": localhost:5000
+
+includes:
+  minikube:
+    taskfile: ./Taskfile.minikube.yaml
+  k8s:
+    taskfile: ./Taskfile.k8s.yaml

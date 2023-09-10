@@ -1,0 +1,90 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: api
+    poop: api
+  name: api
+spec:
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 1
+  selector:
+    matchLabels:
+      app: api
+  template:
+    metadata:
+      labels:
+        app: api
+    spec:
+      serviceAccountName: job-runner
+      volumes:
+        - name: parameter-volume
+          configMap:
+            name: parameter
+      containers:
+        - image: localhost:5000/api:placeholder
+          name: api
+          resources:
+            limits:
+              cpu: 150m
+              memory: 64Mi
+            requests:
+              cpu: 75m
+              memory: 32Mi
+          env:
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: POD_NS
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: WORKERS
+              value: "3"
+            - name: ITERATIONS
+              value: "2000"
+            - name: CONF_PATH
+              value: /etc/parameter/conf.yaml
+          volumeMounts:
+            - name: parameter-volume
+              mountPath: /etc/parameter
+              readOnly: true
+          startupProbe:
+            periodSeconds: 3
+            initialDelaySeconds: 1
+            failureThreshold: 3
+            httpGet:
+              port: 8080
+              path: /startupz
+          livenessProbe:
+            failureThreshold: 6
+            timeoutSeconds: 2
+            httpGet:
+              port: 8080
+              path: /healthz
+          readinessProbe:
+            failureThreshold: 3
+            timeoutSeconds: 2
+            httpGet:
+              port: 8080
+              path: /healthz
+          terminationMessagePolicy: FallbackToLogsOnError
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: api
+  name: api
+spec:
+  ports:
+    - port: 8080
+      protocol: TCP
+      targetPort: 8080
+  selector:
+    app: api
+  type: NodePort

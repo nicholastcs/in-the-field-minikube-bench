@@ -1,0 +1,42 @@
+# yaml-language-server: $schema=https://taskfile.dev/schema.json
+version: '3'
+
+tasks:
+  start-minikube:
+    aliases: [start]
+    cmds:
+      - |
+        minikube start \
+        --kubernetes-version=v1.27 \
+        -n 3 \
+        --container-runtime=containerd \
+        --cni calico \
+        --insecure-registry \
+        "10.0.0.0/24"
+      - minikube addons enable volumesnapshots
+      - minikube addons enable csi-hostpath-driver
+      - minikube addons disable storage-provisioner
+      - minikube addons disable default-storageclass
+      - |
+        kubectl patch storageclass csi-hostpath-sc -p \
+        '{"metadata": {"annotations":{"storageclass.kubernetes.io/is-default-class":"true"}}}'
+      - minikube addons enable registry
+      - minikube addons enable metrics-server
+    desc: >-
+      Installs three-node minikube in your local PC,
+      along with hostPath CSI driver, metrics-server
+      and image registry.
+
+  stop-minikube:
+    aliases: [stop]
+    cmd: minikube delete
+    desc: Deletes your local minikube.
+
+  start-registry-passthrough:
+    aliases: [registry]
+    cmd: |
+      docker run \
+      --rm --network=host -d \
+      alpine ash \
+      -c "apk add socat && socat TCP-LISTEN:5000,reuseaddr,fork TCP:$(minikube ip):5000"
+    desc: Creates Docker registry passthrough at port 5000.

@@ -1,0 +1,57 @@
+# yaml-language-server: $schema=https://taskfile.dev/schema.json
+version: '3'
+
+vars:
+  "TIMESTAMP":
+    sh: date +"%H%M%S-%d%m%y"
+  "REGISTRY": localhost:5000
+
+tasks:
+  build:
+    cmds:
+      - docker build --progress plain -t {{.REGISTRY}}/api:latest .
+    desc: Builds docker image.
+
+  push:
+    cmds:
+      - docker tag {{.REGISTRY}}/api:latest {{.REGISTRY}}/api:{{.TIMESTAMP}}
+      - docker push {{.REGISTRY}}/api:latest
+      - docker push {{.REGISTRY}}/api:{{.TIMESTAMP}}
+      - echo {{.TIMESTAMP}} > tag.txt
+    generates:
+      - tag.txt
+    desc: Builds docker image and push to registry.
+
+  tag-image-env:
+    preconditions:
+      - sh: cat tag.txt
+        msg: tag file (tag.txt) was not found
+    requires:
+     vars: [ENV]
+    vars:
+      "NEW_TAG":
+        sh: cat tag.txt
+    cmd: |
+      yq -i \
+      '.images[].newTag="{{.NEW_TAG}}" | select(.images[].name=="localhost:5000/api")' \
+      kubernetes/overlays/{{.ENV}}/kustomization.yaml
+    desc: Retrieves value from tag.txt and replaces kubernetes/overlays/{{.ENV}}/kustomization.yaml.
+
+  full-flow:
+    requires:
+     vars: [ENV]
+    cmds:
+      - task: build
+      - task: push
+      - task: tag-image-env
+      - task: apply-env
+    desc: Runs full flow from build to apply, based on variable ENV.
+
+  apply-env:
+    requires:
+     vars: [ENV]
+    preconditions:
+      - sh: cat kubernetes/overlays/{{.ENV}}/kustomization.yaml
+        msg: Kustomization manifest file (kubernetes/overlays/{{.ENV}}/kustomization.yaml) was not found
+    cmd: kubectl apply -k kubernetes/overlays/{{.ENV}}
+    desc:  Apply Kubernetes manifest with Kustomize, based on variable ENV.

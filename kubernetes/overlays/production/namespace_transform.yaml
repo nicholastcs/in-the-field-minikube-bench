@@ -1,0 +1,4 @@
+namespace:
+  - kind: RoleBinding
+    path: subjects/namespace
+    create: true
